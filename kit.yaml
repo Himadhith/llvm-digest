@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/dam-agents/dam-starter-kits/main/kit.schema.json
+schemaVersion: v1
+id: llvm-digest
+name: LLVM Digest
+tagline: New LLVM Discourse topics and llvm-project issues on Sanitizers, LLC backend and Clang, summarised in Slack.
+description: >-
+  Watches LLVM Discourse and GitHub issues in llvm/llvm-project for three areas
+  (Sanitizers, LLC / CodeGen backend, Clang frontend), writes a short executive
+  summary of each new item, and posts it to the Slack channel the agent is bound
+  to. A deterministic precheck finds new items first, so runs with nothing new
+  cost no model call. Issues only (no pull requests); first run looks back 48 hours.
+category: software
+icon: search
+harnesses: [claude-code]
+
+# This repository is the agent's definition; everything an instance owns
+# (the SQLite state under state/) lives on the persistent workspace.
+seed:
+  self: true
+  into: home
+
+install:
+  command: cd "$HOME" && python3 -m venv .venv && .venv/bin/pip install --quiet -e .
+
+# Trusted defaults cover GitHub; Discourse is the one addition. Nothing else is reachable.
+egressPreset: trusted
+egressRules:
+  - host: discourse.llvm.org
+    method: GET
+    verdict: allow
+
+connections:
+  - accepts: [github, github-enterprise]
+    required: false
+    note: >-
+      Optional. Authenticated GitHub requests get a far higher rate limit for
+      the issue search. A token with read-only access to public repositories is
+      enough for the tool itself; cloning this repo while it is private also
+      needs the token to include this repository.
+
+channels:
+  - type: slack
+    note: >-
+      The channel the digest is posted to. Keep it mentions-only; the agent
+      posts on its own from the schedule. Bind it with /dam bind and run
+      /dam login once so the agent can post proactively.
+
+# Held by the platform until onboarding completes. Hourly at :00 UTC. The precheck
+# exits 1 when nothing is new, which skips the run without waking a model.
+schedules:
+  - name: llvm-digest-hourly
+    cron: "0 * * * *"
+    sessionMode: fresh
+    precheck: .venv/bin/llvm-digest precheck
+    task: >-
+      Run the LLVM digest as described in CLAUDE.md ("The scheduled run"). The
+      precheck output above is the list of new items. Summarise each one and
+      post it to the bound Slack channel, then record the keys with
+      llvm-digest mark-posted.

@@ -1,0 +1,18 @@
+# Secrets and local config - never commit
+.env
+.env.*
+!.env.example
+
+# Runtime state (SQLite DB; persisted on the DAM volume, not in git)
+state/
+*.db
+*.db-journal
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+build/
+dist/

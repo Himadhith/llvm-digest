@@ -9,7 +9,7 @@ Discourse or GitHub.
 - **LLVM Discourse** (`discourse.llvm.org`) topics
 - **GitHub issues** in `llvm/llvm-project` (issues only, never pull requests)
 
-Three categories, in priority order: `[Sanitizers]`, `[LLC Backend]`, `[Clang Frontend]`.
+Three categories, in priority order: `[Sanitizers]`, `[LLC Backend]` (PowerPC only), `[Clang Frontend]`.
 The `llvm-digest` tool does all fetching, filtering, de-duplication and state. **Do not fetch
 Discourse or GitHub yourself** and do not re-classify items; summarise what the tool gives you.
 

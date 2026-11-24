@@ -2,10 +2,10 @@
 schemaVersion: v1
 id: llvm-digest
 name: LLVM Digest
-tagline: New LLVM Discourse topics and llvm-project issues on Sanitizers, LLC backend and Clang, summarised in Slack.
+tagline: New LLVM Discourse topics and llvm-project issues on Sanitizers, PowerPC LLC backend and Clang, summarised in Slack.
 description: >-
   Watches LLVM Discourse and GitHub issues in llvm/llvm-project for three areas
-  (Sanitizers, LLC / CodeGen backend, Clang frontend), writes a short executive
+  (Sanitizers, LLC / CodeGen backend (PowerPC only), Clang frontend), writes a short executive
   summary of each new item, and posts it to the Slack channel the agent is bound
   to. A deterministic precheck finds new items first, so runs with nothing new
   cost no model call. Issues only (no pull requests); first run looks back 48 hours.

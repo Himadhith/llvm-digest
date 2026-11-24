@@ -6,7 +6,7 @@ posts concise executive summaries to Slack:
 | Category | Discourse | GitHub labels |
 |---|---|---|
 | `[Sanitizers]` | category 12/73, keywords (ASan, MSan, TSan, UBSan, HWASan, ...) | `compiler-rt:*san`, `compiler-rt:sanitizer` |
-| `[LLC Backend]` | CodeGen categories 51-59, AMDGPU, keywords (ISel, TableGen, ...) | `backend:*`, `tools:llc`, `llvm:codegen`, `llvm:globalisel`, `tablegen` |
+| `[LLC Backend]` (PowerPC only) | PowerPC category 56; CodeGen categories 51-52 and keywords (ISel, TableGen, ...) only with a PowerPC mention | `backend:PowerPC`; `tools:llc`, `llvm:codegen`, `llvm:globalisel`, `tablegen` only with a PowerPC mention |
 | `[Clang Frontend]` | Clang categories 6/47/48/49/113, keywords (Sema, parser, ...) | `clang`, `clang:*`, `extension:clang` |
 
 Issues only (pull requests are excluded). The default look-back window is 48 hours.

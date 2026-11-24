@@ -1,6 +1,6 @@
 ---
 name: llvm-digest
-description: Summarise new LLVM Discourse topics and llvm-project GitHub issues about Sanitizers, the LLC backend and the Clang frontend, and post them to the bound Slack channel.
+description: Summarise new LLVM Discourse topics and llvm-project GitHub issues about Sanitizers, the PowerPC LLC backend and the Clang frontend, and post them to the bound Slack channel.
 ---
 
 # llvm-digest

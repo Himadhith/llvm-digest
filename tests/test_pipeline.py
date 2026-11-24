@@ -42,13 +42,14 @@ def route(request: httpx.Request) -> httpx.Response:
     if host == "discourse.llvm.org" and path == "/t/2.json":
         return httpx.Response(200, json={"post_stream": {"posts": [{"username": "x", "cooked": "<p>Community values.</p>"}]}})
     if host == "discourse.llvm.org" and path == "/t/3.json":
-        return httpx.Response(200, json={"post_stream": {"posts": [{"username": "x", "cooked": "<p>ISel fails in SelectionDAG for vectors.</p>"}]}})
+        return httpx.Response(200, json={"post_stream": {"posts": [{"username": "x", "cooked": "<p>ISel fails in SelectionDAG for vectors on PowerPC.</p>"}]}})
     if host == "api.github.com":
         return httpx.Response(
             200,
             json={
                 "items": [
-                    {"number": 50, "title": "x86 crash", "html_url": "https://github.com/llvm/llvm-project/issues/50", "created_at": "2026-11-24T11:00:00Z", "user": {"login": "bob"}, "labels": [{"name": "backend:X86"}], "body": "Crash in isel."},
+                    {"number": 50, "title": "ppc64le crash", "html_url": "https://github.com/llvm/llvm-project/issues/50", "created_at": "2026-11-24T11:00:00Z", "user": {"login": "bob"}, "labels": [{"name": "backend:PowerPC"}], "body": "Crash in isel."},
+                    {"number": 52, "title": "x86 crash", "html_url": "https://github.com/llvm/llvm-project/issues/52", "created_at": "2026-11-24T11:00:00Z", "user": {"login": "bob"}, "labels": [{"name": "backend:X86"}], "body": "Crash in isel."},
                     {"number": 51, "title": "InstCombine bug", "html_url": "https://github.com/llvm/llvm-project/issues/51", "created_at": "2026-11-24T11:00:00Z", "user": {"login": "bob"}, "labels": [{"name": "llvm:instcombine"}], "body": ""},
                 ]
             },
@@ -67,7 +68,7 @@ def test_end_to_end_scan_filters_and_dedupes() -> None:
         result = pipeline(state).scan(NOW)
         keys = {c.item.key for c in result.candidates}
         assert keys == {"discourse:1", "discourse:3", "github:50"}
-        assert result.irrelevant == 3  # topic 2, topic 4 (excluded category), issue 51
+        assert result.irrelevant == 4  # topic 2, topic 4 (excluded category), issue 51, issue 52 (X86 is not PowerPC)
         by_key = {c.item.key: c for c in result.candidates}
         assert by_key["discourse:1"].item.body.startswith("ASan reports")  # hydrated
         assert by_key["discourse:3"].classification.primary is Domain.LLC  # found via body scan

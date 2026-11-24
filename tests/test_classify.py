@@ -17,8 +17,27 @@ def test_github_sanitizer_label() -> None:
     assert result is not None and result.primary is Domain.SANITIZERS
 
 
-def test_github_backend_label() -> None:
-    result = classify(labels=("backend:X86", "miscompilation"))
+def test_github_powerpc_label_selects_llc() -> None:
+    result = classify(labels=("backend:PowerPC", "miscompilation"))
+    assert result is not None and result.primary is Domain.LLC
+
+
+def test_github_other_backend_labels_are_ignored() -> None:
+    for label in ("backend:X86", "backend:AArch64", "backend:RISC-V", "backend:SystemZ", "backend:AMDGPU"):
+        assert classify(labels=(label, "crash")) is None, label
+
+
+def test_generic_llc_label_needs_powerpc_mention() -> None:
+    assert classify(labels=("tools:llc",), title="llc crashes on large input") is None
+    assert classify(labels=("llvm:codegen",), title="Wrong code", body="Seen on x86 and aarch64") is None
+    result = classify(labels=("llvm:codegen",), title="Wrong code", body="Seen on ppc64le with -O2")
+    assert result is not None and result.primary is Domain.LLC
+    result = classify(labels=("tablegen",), title="TableGen: PowerPC patterns are not emitted")
+    assert result is not None and result.primary is Domain.LLC
+
+
+def test_x86_label_plus_powerpc_label_still_matches_via_powerpc() -> None:
+    result = classify(labels=("backend:X86", "backend:PowerPC"))
     assert result is not None and result.primary is Domain.LLC
 
 
@@ -52,10 +71,26 @@ def test_unlabelled_github_issue_without_keywords_is_dropped() -> None:
 def test_discourse_category_match() -> None:
     result = classify(source="discourse", category_id=12, title="Anything")
     assert result is not None and result.primary is Domain.SANITIZERS
-    result = classify(source="discourse", category_id=59, title="Anything")
+    result = classify(source="discourse", category_id=56, title="Anything")  # PowerPC
     assert result is not None and result.primary is Domain.LLC
     result = classify(source="discourse", category_id=6, title="Anything")
     assert result is not None and result.primary is Domain.CLANG
+
+
+def test_discourse_other_target_categories_are_ignored() -> None:
+    for category in (53, 54, 55, 57, 58, 59, 38):  # AArch64, ARM, Mips, RISCV, WebAssembly, X86, AMDGPU
+        assert classify(source="discourse", category_id=category, title="Anything") is None, category
+
+
+def test_discourse_generic_codegen_category_needs_powerpc_mention() -> None:
+    assert classify(source="discourse", category_id=51, title="Rework instruction selection") is None
+    result = classify(source="discourse", category_id=51, title="PowerPC: rework instruction selection")
+    assert result is not None and result.primary is Domain.LLC
+    item = make_item(source="discourse", category_id=52, title="Question", body="Affects ppc64le only")
+    clf = Classifier(Config())
+    assert clf.classify(item) is None and clf.needs_body_scan(item)
+    scanned = clf.classify(item, use_body=True)
+    assert scanned is not None and scanned.primary is Domain.LLC
 
 
 def test_discourse_excluded_category_and_tag() -> None:
@@ -70,7 +105,7 @@ def test_discourse_generic_category_needs_keyword() -> None:
 
 
 def test_discourse_body_scan_only_when_enabled() -> None:
-    item = make_item(source="discourse", category_id=5, title="Question about lowering", body="we hit an ISel failure in SelectionDAG")
+    item = make_item(source="discourse", category_id=5, title="Question about lowering", body="we hit an ISel failure in SelectionDAG on PowerPC")
     clf = Classifier(Config())
     assert clf.classify(item) is None
     assert clf.needs_body_scan(item)
@@ -79,15 +114,48 @@ def test_discourse_body_scan_only_when_enabled() -> None:
 
 
 def test_weak_keywords_need_two_distinct_hits() -> None:
-    assert classify(title="Our x86 build bot is slow") is None
-    result = classify(title="Backend crash lowering on x86")
+    assert classify(title="Our parser is slow") is None
+    result = classify(title="Clang parser and lexer rework")
+    assert result is not None and result.primary is Domain.CLANG
+
+
+def test_llc_keywords_require_powerpc() -> None:
+    assert classify(title="Backend crash lowering on x86") is None
+    assert classify(title="TableGen: emit better matchers") is None
+    assert classify(title="ISel failure on AArch64") is None
+    result = classify(title="Backend crash lowering on PowerPC")
     assert result is not None and result.primary is Domain.LLC
+    result = classify(title="TableGen: emit better matchers for ppc64le")
+    assert result is not None and result.primary is Domain.LLC
+
+
+def test_powerpc_alone_is_not_enough() -> None:
+    assert classify(title="PowerPC build bot is slow") is None
+    assert classify(title="Power10 availability on the cloud") is None
+
+
+def test_powerpc_specific_terms_count_as_backend_signals() -> None:
+    result = classify(title="AltiVec miscompile on POWER9")
+    assert result is not None and result.primary is Domain.LLC
+
+
+def test_sanitizers_and_clang_unaffected_by_powerpc_gate() -> None:
+    result = classify(title="ASan false positive on x86")
+    assert result is not None and result.primary is Domain.SANITIZERS
+    result = classify(title="Sema crash on aarch64 target")
+    assert result is not None and result.primary is Domain.CLANG
+
+
+def test_sanitizer_and_powerpc_gets_both_domains() -> None:
+    result = classify(title="ASan crash in PowerPC ISel")
+    assert result is not None and result.primary is Domain.SANITIZERS
+    assert result.secondary == (Domain.LLC,)
 
 
 def test_strong_keywords() -> None:
     for title, domain in [
         ("TSan data race in libc++", Domain.SANITIZERS),
-        ("TableGen: emit better matchers", Domain.LLC),
+        ("TableGen: emit better matchers for PowerPC", Domain.LLC),
         ("Sema crash on invalid template", Domain.CLANG),
         ("-fsanitize=undefined breaks build", Domain.SANITIZERS),
     ]:

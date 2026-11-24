@@ -9,7 +9,9 @@ from urllib.parse import urlsplit
 
 #: Defaults taken from the live discourse.llvm.org category tree (site.json).
 DEFAULT_SANITIZER_CATEGORIES = frozenset({12, 73})  # Sanitizers, CompilerRT
-DEFAULT_LLC_CATEGORIES = frozenset({51, 52, 53, 54, 55, 56, 57, 58, 59, 38})  # CodeGen tree + AMDGPU
+DEFAULT_LLC_CATEGORIES = frozenset({56})  # PowerPC: the only target-specific CodeGen category we follow
+#: Target-agnostic CodeGen categories: relevant only when the topic also mentions PowerPC.
+DEFAULT_LLC_GENERIC_CATEGORIES = frozenset({51, 52})  # Code Generation, Common CodeGen Infrastructure
 DEFAULT_CLANG_CATEGORIES = frozenset({6, 47, 48, 49, 113})  # Clang, Using, Building, Static Analyzer, ISO
 #: Announcements, newsletters, automated reports, job postings, ...
 DEFAULT_EXCLUDED_CATEGORIES = frozenset({75, 76, 16, 69, 37, 44, 46})
@@ -59,6 +61,7 @@ class Config:
 
     sanitizer_categories: frozenset[int] = DEFAULT_SANITIZER_CATEGORIES
     llc_categories: frozenset[int] = DEFAULT_LLC_CATEGORIES
+    llc_generic_categories: frozenset[int] = DEFAULT_LLC_GENERIC_CATEGORIES
     clang_categories: frozenset[int] = DEFAULT_CLANG_CATEGORIES
     excluded_categories: frozenset[int] = DEFAULT_EXCLUDED_CATEGORIES
     body_scan_categories: frozenset[int] = DEFAULT_BODY_SCAN_CATEGORIES
@@ -98,6 +101,7 @@ class Config:
             llm_model=env.get("LLM_MODEL", "").strip(),
             sanitizer_categories=_ids(env, "SANITIZER_CATEGORY_IDS", d.sanitizer_categories),
             llc_categories=_ids(env, "LLC_CATEGORY_IDS", d.llc_categories),
+            llc_generic_categories=_ids(env, "LLC_GENERIC_CATEGORY_IDS", d.llc_generic_categories),
             clang_categories=_ids(env, "CLANG_CATEGORY_IDS", d.clang_categories),
             excluded_categories=_ids(env, "EXCLUDED_CATEGORY_IDS", d.excluded_categories),
             body_scan_categories=_ids(env, "BODY_SCAN_CATEGORY_IDS", d.body_scan_categories),

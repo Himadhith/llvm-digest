@@ -1,10 +1,15 @@
-"""Decide whether an item belongs to Sanitizers, LLC backend or Clang frontend.
+"""Decide whether an item belongs to Sanitizers, LLC backend (PowerPC only) or Clang frontend.
 
 Evidence, strongest first:
 
 1. GitHub labels / Discourse categories and tags (curated by the LLVM community)
 2. *Strong* keywords (unambiguous: ``ASan``, ``TableGen``, ``Sema`` ...)
-3. *Weak* keywords (``codegen``, ``x86``, ``parser`` ...) - two distinct ones are needed
+3. *Weak* keywords (``codegen``, ``parser`` ...) - two distinct ones are needed
+
+The LLC Backend domain is deliberately **PowerPC-only**: it needs either PowerPC-specific
+evidence on its own (the PowerPC Discourse category, the ``backend:PowerPC`` label) or a generic
+backend signal (``llc``, ``TableGen``, ``codegen`` ...) *together with* a PowerPC mention.
+Other targets (X86, AArch64, ...) never match on their own.
 
 An item may match several domains; the primary one follows ``DOMAIN_PRIORITY``.
 """
@@ -44,13 +49,14 @@ _STRONG: dict[Domain, tuple[re.Pattern[str], ...]] = {
     ),
 }
 
-_TARGETS = r"(?:x86(?:[-_]64)?|aarch64|arm64|arm|risc-?v|systemz|s390x?|powerpc|ppc64\w*|mips\w*|amdgpu|hexagon|loongarch|wasm|webassembly)"
+#: A PowerPC mention is mandatory for any keyword-based LLC match.
+_POWERPC = re.compile(r"\b(?:powerpc|ppc(?:32|64\w*)?|power(?:8|9|10|11)|pwr(?:8|9|10|11))\b", _FLAGS)
 _WEAK: dict[Domain, tuple[re.Pattern[str], ...]] = {
     Domain.LLC: (
         re.compile(r"\b(?:codegen|code generation)\b", _FLAGS),
-        re.compile(rf"\b{_TARGETS}\b", _FLAGS),
         re.compile(r"\bbackends?\b", _FLAGS),
         re.compile(r"\b(?:calling convention|scheduling model|lowering)\b", _FLAGS),
+        re.compile(r"\b(?:altivec|vsx|xcoff|elfv[12]|mma)\b", _FLAGS),  # PowerPC-specific backend topics
     ),
     Domain.CLANG: (
         re.compile(r"\bclang\b(?!-(?:tidy|format|doc|query|repl|include-cleaner|apply-replacements))", _FLAGS),
@@ -61,7 +67,11 @@ _WEAK: dict[Domain, tuple[re.Pattern[str], ...]] = {
 }
 
 _SANITIZER_LABEL = re.compile(r"^compiler-rt:\w*san(?:itizer)?$", _FLAGS)
-_LLC_LABELS = frozenset({"tools:llc", "llvm:codegen", "llvm:globalisel", "tablegen", "llvm:selectiondag"})
+_POWERPC_LABEL = "backend:powerpc"
+#: Reason prefix for target-agnostic evidence; such evidence alone never selects LLC.
+_GENERIC = "generic:"
+#: Target-agnostic backend labels: only relevant when the text also mentions PowerPC.
+_GENERIC_LLC_LABELS = frozenset({"tools:llc", "llvm:codegen", "llvm:globalisel", "tablegen", "llvm:selectiondag"})
 _CLANG_LABELS = frozenset({"clang", "extension:clang", "clang-cl"})
 _DISCOURSE_CLANG_TAGS = frozenset({"clang"})
 
@@ -73,31 +83,59 @@ class _Evidence:
 
 
 def label_domains(labels: tuple[str, ...]) -> dict[Domain, list[str]]:
-    """Map GitHub labels / Discourse tags to domains."""
+    """Map GitHub labels / Discourse tags to domains.
+
+    ``backend:PowerPC`` is the only label that selects LLC by itself; generic backend labels are
+    kept as ``generic:label:<name>`` reasons and filtered by :func:`powerpc_only` against the text.
+    Labels of other targets (``backend:X86`` ...) are ignored.
+    """
     found: dict[Domain, list[str]] = {}
     for raw in labels:
         label = raw.strip().lower()
         if _SANITIZER_LABEL.match(label):
             found.setdefault(Domain.SANITIZERS, []).append(f"label:{label}")
-        elif label.startswith("backend:") or label in _LLC_LABELS:
+        elif label == _POWERPC_LABEL:
             found.setdefault(Domain.LLC, []).append(f"label:{label}")
+        elif label in _GENERIC_LLC_LABELS:
+            found.setdefault(Domain.LLC, []).append(f"{_GENERIC}label:{label}")
         elif label.startswith("clang:") or label in _CLANG_LABELS or label in _DISCOURSE_CLANG_TAGS:
             found.setdefault(Domain.CLANG, []).append(f"label:{label}")
     return found
 
 
 def keyword_domains(text: str) -> dict[Domain, list[str]]:
-    """Scan text for domain keywords. Weak-only matches need two distinct hits."""
+    """Scan text for domain keywords. Weak-only matches need two distinct hits.
+
+    LLC additionally requires a PowerPC mention plus one backend signal (strong or weak).
+    """
     found: dict[Domain, list[str]] = {}
     for domain in DOMAIN_PRIORITY:
         strong = _hits(_STRONG.get(domain, ()), text)
-        if strong:
-            found[domain] = [f"keyword:{h}" for h in strong[:3]]
-            continue
         weak = _hits(_WEAK.get(domain, ()), text)
-        if len(weak) >= 2:
+        if domain is Domain.LLC:
+            ppc = _hits((_POWERPC,), text)
+            signals = strong + weak
+            if ppc and signals:
+                found[domain] = [f"keywords:{'+'.join((ppc + signals)[:3])}"]
+        elif strong:
+            found[domain] = [f"keyword:{h}" for h in strong[:3]]
+        elif len(weak) >= 2:
             found[domain] = [f"keywords:{'+'.join(weak[:3])}"]
     return found
+
+
+def powerpc_only(found: dict[Domain, list[str]], text: str) -> None:
+    """Drop the LLC domain unless the evidence is PowerPC-specific. Mutates ``found``.
+
+    PowerPC-specific: the PowerPC category, the ``backend:PowerPC`` label, or a keyword match
+    (already PowerPC-gated). Generic evidence (generic CodeGen categories, ``tools:llc`` ...)
+    survives only if the text mentions PowerPC.
+    """
+    reasons = found.get(Domain.LLC)
+    if not reasons:
+        return
+    if all(r.startswith(_GENERIC) for r in reasons) and not _POWERPC.search(text):
+        del found[Domain.LLC]
 
 
 def _hits(patterns: tuple[re.Pattern[str], ...], text: str) -> list[str]:
@@ -117,7 +155,10 @@ class Classifier:
 
     def needs_body_scan(self, item: Item) -> bool:
         """True if a title-only miss on this Discourse item deserves a look at the body."""
-        return item.source == "discourse" and item.category_id in self._cfg.body_scan_categories
+        cfg = self._cfg
+        return item.source == "discourse" and (
+            item.category_id in cfg.body_scan_categories or item.category_id in cfg.llc_generic_categories
+        )
 
     def classify(self, item: Item, *, use_body: bool = False) -> Classification | None:
         """Return the classification, or ``None`` when the item is irrelevant."""
@@ -137,6 +178,8 @@ class Classifier:
             found.setdefault(Domain.SANITIZERS, []).append(f"category:{category}")
         if category in cfg.llc_categories:
             found.setdefault(Domain.LLC, []).append(f"category:{category}")
+        elif category in cfg.llc_generic_categories:
+            found.setdefault(Domain.LLC, []).append(f"{_GENERIC}category:{category}")
         if category in cfg.clang_categories:
             found.setdefault(Domain.CLANG, []).append(f"category:{category}")
         _merge(found, label_domains(item.labels))
@@ -144,11 +187,13 @@ class Classifier:
         if use_body and item.body:
             text = f"{item.title}\n{item.body}"
         _merge(found, keyword_domains(text))
+        powerpc_only(found, text)
         return _build(found)
 
     def _github(self, item: Item) -> Classification | None:
         found = label_domains(item.labels)
-        if not found:  # freshly filed issues are often unlabelled: fall back to the title only
+        powerpc_only(found, f"{item.title}\n{item.body}")
+        if not found:  # freshly filed / non-matching issues: fall back to title keywords
             found = keyword_domains(item.title)
         return _build(found)
 
